@@ -12,6 +12,15 @@ st.set_page_config(page_title="Calendar Confirmation Agent", page_icon="📅", l
 st.title("📅 Calendar Appointment Confirmation Agent")
 st.markdown("Use AI to confirm your Google Calendar appointments.")
 
+# --- Security Check ---
+# Only require password if configured in secrets
+if "APP_PASSWORD" in st.secrets:
+    password = st.text_input("Enter App Password", type="password")
+    if password != st.secrets["APP_PASSWORD"]:
+        st.warning("Please enter the correct password to access the application.")
+        st.stop()
+# ----------------------
+
 # Sidebar - Configuration
 st.sidebar.header("Configuration")
 # Try to load from secrets or env
