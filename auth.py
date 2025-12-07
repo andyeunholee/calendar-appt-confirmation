@@ -3,6 +3,7 @@ import streamlit as st
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
+import json
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = [
@@ -22,6 +23,15 @@ def get_credentials():
     # time.
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    
+    # Priority: Check Streamlit Secrets for full token JSON
+    # This enables cloud deployment without browser interaction
+    elif 'GOOGLE_TOKEN_JSON' in st.secrets:
+        try:
+            token_info = json.loads(st.secrets['GOOGLE_TOKEN_JSON'])
+            creds = Credentials.from_authorized_user_info(token_info, SCOPES)
+        except Exception as e:
+            st.error(f"Error loading token from secrets: {e}")
     
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
