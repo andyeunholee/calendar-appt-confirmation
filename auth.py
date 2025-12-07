@@ -24,11 +24,19 @@ def get_credentials():
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
     
-    # Priority: Check Streamlit Secrets for full token JSON
+    # Priority: Check Streamlit Secrets for google credentials
     # This enables cloud deployment without browser interaction
-    elif 'GOOGLE_TOKEN_JSON' in st.secrets:
+    elif 'google' in st.secrets:
         try:
-            token_info = json.loads(st.secrets['GOOGLE_TOKEN_JSON'])
+            # Build token info dictionary from secrets
+            token_info = {
+                'token': st.secrets['google']['token'],
+                'refresh_token': st.secrets['google']['refresh_token'],
+                'token_uri': st.secrets['google']['token_uri'],
+                'client_id': st.secrets['google']['client_id'],
+                'client_secret': st.secrets['google']['client_secret'],
+                'scopes': st.secrets['google']['scopes']
+            }
             creds = Credentials.from_authorized_user_info(token_info, SCOPES)
         except Exception as e:
             st.error(f"Error loading token from secrets: {e}")
