@@ -38,19 +38,6 @@ if not gemini_api_key:
 if gemini_api_key:
     agent.configure_genai(gemini_api_key)
     st.sidebar.success("AI Agent Configured")
-    
-    # --- DEBUG INFO (Temporary) ---
-    with st.sidebar.expander("🔧 Debug Info", expanded=True):
-        import google.generativeai as genai
-        st.write(f"GenAI Version: {genai.__version__}")
-        try:
-            models = [m.name for m in genai.list_models()]
-            st.write("Available Models:")
-            st.write(models)
-        except Exception as e:
-            st.error(f"List models failed: {e}")
-    # -----------------------------
-
 else:
     st.sidebar.warning("Please enter Gemini API Key to use AI features.")
 

@@ -42,7 +42,7 @@ def generate_email_content(event_details, teacher_name="Teacher", student_name="
     except:
         pass
 
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-flash')
     
     prompt = f"""
     You are an automated email assistant for Elite Prep Suwanee.
@@ -126,7 +126,7 @@ def generate_teacher_email_content(event_details, teacher_name="Teacher", studen
     except:
         pass
     
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-flash')
     
     prompt = f"""
     You are an automated email assistant for Elite Prep Suwanee.
