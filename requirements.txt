@@ -2,5 +2,5 @@ streamlit
 google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
-google-generativeai
+google-generativeai>=0.5.0
 python-dotenv
