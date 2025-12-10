@@ -69,6 +69,11 @@ with col1:
     
     if st.button("Refresh Events"):
         st.session_state.events = calendar_api.get_upcoming_events(calendar_service, start_date=selected_date)
+        # Clear drafts when refreshing
+        if 'student_draft' in st.session_state:
+            del st.session_state.student_draft
+        if 'teacher_draft' in st.session_state:
+            del st.session_state.teacher_draft
         
     if 'events' not in st.session_state:
         st.session_state.events = calendar_api.get_upcoming_events(calendar_service, start_date=selected_date)
@@ -83,13 +88,25 @@ with col1:
         selected_event_label = st.radio("Select an event:", list(event_options.keys()))
         selected_event = event_options[selected_event_label]
         
+        # Store selected event in session state
+        # Clear drafts if event changed
+        if 'selected_event_id' not in st.session_state or st.session_state.selected_event_id != selected_event.get('id'):
+            st.session_state.selected_event_id = selected_event.get('id')
+            st.session_state.selected_event = selected_event
+            # Clear old drafts when selecting a different event
+            if 'student_draft' in st.session_state:
+                del st.session_state.student_draft
+            if 'teacher_draft' in st.session_state:
+                del st.session_state.teacher_draft
+        
         st.write("---")
 
 with col2:
     st.subheader("2. Draft Confirmation Email")
     
     # Draft Email Section
-    if 'selected_event' in locals() and selected_event:
+    if 'selected_event' in st.session_state and st.session_state.selected_event:
+        selected_event = st.session_state.selected_event
         teacher_name = st.text_input("Teacher Name", value="Teacher")
         student_name = st.text_input("Student Name", value="Student")
         
@@ -109,32 +126,44 @@ with col2:
             else:
                 with st.spinner("Generating emails..."):
                     # Generate Student Email
-                    student_content = agent.generate_email_content(selected_event, teacher_name, student_name)
-                    s_subject = "Appointment Confirmation"
-                    s_body = student_content
-                    if "Subject:" in student_content:
-                        parts = student_content.split("Subject:", 1)
-                        if len(parts) > 1:
-                            subject_part = parts[1].split("\n", 1)
-                            s_subject = subject_part[0].strip()
-                            if len(subject_part) > 1:
-                                s_body = subject_part[1].strip()
+                    try:
+                        student_content = agent.generate_email_content(selected_event, teacher_name, student_name)
+                        s_subject = "Appointment Confirmation"
+                        s_body = student_content
+                        if "Subject:" in student_content:
+                            parts = student_content.split("Subject:", 1)
+                            if len(parts) > 1:
+                                subject_part = parts[1].split("\n", 1)
+                                s_subject = subject_part[0].strip()
+                                if len(subject_part) > 1:
+                                    s_body = subject_part[1].strip()
+                        
+                        st.session_state.student_draft = {'subject': s_subject, 'body': s_body}
+                    except Exception as e:
+                        st.error(f"Failed to generate student email: {str(e)}")
+                        st.session_state.student_draft = {'subject': 'Error', 'body': f'Error generating email: {str(e)}'}
                     
-                    st.session_state.student_draft = {'subject': s_subject, 'body': s_body}
+                    # Add delay to avoid rate limiting
+                    import time
+                    time.sleep(2)
                     
                     # Generate Teacher Email
-                    teacher_content = agent.generate_teacher_email_content(selected_event, teacher_name, student_name)
-                    t_subject = "Appointment Reminder"
-                    t_body = teacher_content
-                    if "Subject:" in teacher_content:
-                        parts = teacher_content.split("Subject:", 1)
-                        if len(parts) > 1:
-                            subject_part = parts[1].split("\n", 1)
-                            t_subject = subject_part[0].strip()
-                            if len(subject_part) > 1:
-                                t_body = subject_part[1].strip()
+                    try:
+                        teacher_content = agent.generate_teacher_email_content(selected_event, teacher_name, student_name)
+                        t_subject = "Appointment Reminder"
+                        t_body = teacher_content
+                        if "Subject:" in teacher_content:
+                            parts = teacher_content.split("Subject:", 1)
+                            if len(parts) > 1:
+                                subject_part = parts[1].split("\n", 1)
+                                t_subject = subject_part[0].strip()
+                                if len(subject_part) > 1:
+                                    t_body = subject_part[1].strip()
 
-                    st.session_state.teacher_draft = {'subject': t_subject, 'body': t_body}
+                        st.session_state.teacher_draft = {'subject': t_subject, 'body': t_body}
+                    except Exception as e:
+                        st.error(f"Failed to generate teacher email: {str(e)}")
+                        st.session_state.teacher_draft = {'subject': 'Error', 'body': f'Error generating email: {str(e)}'}
 
     # Display Drafts
     tab1, tab2 = st.tabs(["Student Email", "Teacher Email"])

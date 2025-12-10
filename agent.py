@@ -1,10 +1,40 @@
 import google.generativeai as genai
 import os
 import streamlit as st
+import time
 
 def configure_genai(api_key):
     """Configures the Gemini API."""
     genai.configure(api_key=api_key)
+
+
+def generate_content_with_retry(model, prompt, retries=4, base_delay=10):
+    """
+    Generates content with retry logic for 429 or 503 errors.
+    Also handles blocked responses (RECITATION, SAFETY).
+    """
+    for attempt in range(retries):
+        try:
+            response = model.generate_content(prompt)
+            
+            # Check if response was blocked
+            if not response.candidates or not response.candidates[0].content.parts:
+                # Response was blocked (RECITATION, SAFETY, etc.)
+                finish_reason = response.candidates[0].finish_reason if response.candidates else "UNKNOWN"
+                raise ValueError(f"Response blocked by safety filters. Finish reason: {finish_reason}")
+            
+            return response.text
+        except ValueError as ve:
+            # Safety/recitation block - don't retry, just fail
+            raise ve
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str or "503" in error_str:
+                if attempt < retries - 1:
+                    wait_time = base_delay * (2 ** attempt)  # Exponential backoff: 10, 20, 40...
+                    time.sleep(wait_time)
+                    continue
+            raise e
 
 def generate_email_content(event_details, teacher_name="Teacher", student_name="Student"):
     """
@@ -84,8 +114,7 @@ def generate_email_content(event_details, teacher_name="Teacher", student_name="
     """
     
     try:
-        response = model.generate_content(prompt)
-        return response.text
+        return generate_content_with_retry(model, prompt)
     except Exception as e:
         return f"Error generating email: {e}"
 
@@ -166,7 +195,6 @@ def generate_teacher_email_content(event_details, teacher_name="Teacher", studen
     """
     
     try:
-        response = model.generate_content(prompt)
-        return response.text
+        return generate_content_with_retry(model, prompt)
     except Exception as e:
         return f"Error generating email: {e}"

@@ -8,18 +8,26 @@ def get_calendar_service(creds):
 def get_upcoming_events(service, start_date=None, max_results=10):
     """
     Gets upcoming events.
-    If start_date is provided, fetches events for that specific day (local time to UTC).
+    If start_date is provided, fetches events for that specific day (local time).
     """
     if start_date:
-        # Create distinct time range for that day
-        # Assumes user is in local time, need to be careful with Timezones. 
-        # For simplicity, we'll query from start of day to end of day in UTC.
-        # In a real app, we should handle timezones more precisely (e.g. pytz).
-        start_datetime = datetime.datetime.combine(start_date, datetime.time.min)
-        end_datetime = datetime.datetime.combine(start_date, datetime.time.max)
+        # Create datetime range for the selected day in local timezone
+        import datetime as dt
         
-        timeMin = start_datetime.isoformat() + 'Z'
-        timeMax = end_datetime.isoformat() + 'Z'
+        # Get local timezone offset
+        now = dt.datetime.now()
+        utc_offset = now.astimezone().utcoffset()
+        
+        # Start and end of the selected day in local time
+        start_datetime = dt.datetime.combine(start_date, dt.time.min)
+        end_datetime = dt.datetime.combine(start_date, dt.time.max)
+        
+        # Convert to UTC-aware datetime
+        start_datetime_utc = start_datetime - utc_offset
+        end_datetime_utc = end_datetime - utc_offset
+        
+        timeMin = start_datetime_utc.isoformat() + 'Z'
+        timeMax = end_datetime_utc.isoformat() + 'Z'
         
         print(f"Getting events for {start_date}")
         events_result = service.events().list(calendarId='primary', 
