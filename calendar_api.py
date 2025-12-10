@@ -11,25 +11,23 @@ def get_upcoming_events(service, start_date=None, max_results=10):
     If start_date is provided, fetches events for that specific day (local time).
     """
     if start_date:
-        # Create datetime range for the selected day in local timezone
+        # Create datetime range for the selected day in US/Eastern timezone
+        # This ensures consistency between Local (EST) and Cloud (UTC) execution
         import datetime as dt
+        import pytz
         
-        # Get local timezone offset
-        now = dt.datetime.now()
-        utc_offset = now.astimezone().utcoffset()
+        # Define target timezone
+        tz = pytz.timezone('America/New_York')
         
-        # Start and end of the selected day in local time
-        start_datetime = dt.datetime.combine(start_date, dt.time.min)
-        end_datetime = dt.datetime.combine(start_date, dt.time.max)
+        # Create start/end of day in Eastern Time
+        start_dt_et = tz.localize(dt.datetime.combine(start_date, dt.time.min))
+        end_dt_et = tz.localize(dt.datetime.combine(start_date, dt.time.max))
         
-        # Convert to UTC-aware datetime
-        start_datetime_utc = start_datetime - utc_offset
-        end_datetime_utc = end_datetime - utc_offset
+        # Convert to UTC for API query
+        timeMin = start_dt_et.astimezone(pytz.UTC).isoformat()
+        timeMax = end_dt_et.astimezone(pytz.UTC).isoformat()
         
-        timeMin = start_datetime_utc.isoformat() + 'Z'
-        timeMax = end_datetime_utc.isoformat() + 'Z'
-        
-        print(f"Getting events for {start_date}")
+        print(f"Getting events for {start_date} (Timezone: America/New_York)")
         events_result = service.events().list(calendarId='primary', 
                                             timeMin=timeMin,
                                             timeMax=timeMax,
