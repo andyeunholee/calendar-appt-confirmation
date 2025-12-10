@@ -15,7 +15,15 @@ def generate_content_with_retry(model, prompt, retries=4, base_delay=10):
     """
     for attempt in range(retries):
         try:
-            response = model.generate_content(prompt)
+            # Configure safety settings to prevent false positives
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+            
+            response = model.generate_content(prompt, safety_settings=safety_settings)
             
             # Check if response was blocked
             if not response.candidates or not response.candidates[0].content.parts:
