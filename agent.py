@@ -206,3 +206,109 @@ def generate_teacher_email_content(event_details, teacher_name="Teacher", studen
         return generate_content_with_retry(model, prompt)
     except Exception as e:
         return f"Error generating email: {e}"
+
+def generate_sms_content(event_details, teacher_name="Teacher", student_name="Student"):
+    """
+    Generates a confirmation SMS for the STUDENT using Gemini.
+    """
+    
+    # Extract event info
+    summary = event_details.get('summary', 'Appointment')
+    
+    # Time Parsing Logic
+    start_raw = event_details['start'].get('dateTime', event_details['start'].get('date'))
+    
+    formatted_time_str = start_raw 
+    formatted_date_str = start_raw 
+
+    try:
+        import datetime
+        if 'T' in start_raw:
+            dt_start = datetime.datetime.fromisoformat(start_raw)
+            # Short Date: Dec 6
+            formatted_date_str = dt_start.strftime('%b %d')
+            # Short Time: 3:30pm
+            start_str = dt_start.strftime('%I:%M%p').lower()
+            if start_str.startswith('0'): start_str = start_str[1:]
+            formatted_time_str = start_str
+        else:
+            formatted_time_str = "All Day"
+            formatted_date_str = start_raw
+    except:
+        pass
+
+    model = genai.GenerativeModel('gemini-2.5-flash')
+    
+    prompt = f"""
+    You are an automated assistant for Elite Prep Suwanee.
+    Generate a SHORT SMS reminder (max 160 chars) for a student.
+    
+    Details:
+    - Teacher: {teacher_name}
+    - Student: {student_name}
+    - Date: {formatted_date_str}
+    - Time: {formatted_time_str}
+    
+    Format:
+    Hi {student_name}, Reminder: Tutoring with {teacher_name} on [Date] at [Time]. Pls reply [Y] confirm, [N] cancel. -Elite Prep
+    
+    Make sure dates and times are filled in.
+    """
+    
+    try:
+        return generate_content_with_retry(model, prompt)
+    except Exception as e:
+        return f"Error generating SMS: {e}"
+
+def generate_teacher_sms_content(event_details, teacher_name="Teacher", student_name="Student"):
+    """
+    Generates a confirmation SMS for the TEACHER using Gemini.
+    """
+    
+    # Extract event info
+    summary = event_details.get('summary', 'Appointment')
+    
+    # Time Parsing Logic
+    start_raw = event_details['start'].get('dateTime', event_details['start'].get('date'))
+    
+    formatted_time_str = start_raw 
+    formatted_date_str = start_raw 
+
+    try:
+        import datetime
+        if 'T' in start_raw:
+            dt_start = datetime.datetime.fromisoformat(start_raw)
+            # Short Date: Dec 6
+            formatted_date_str = dt_start.strftime('%b %d')
+            # Short Time: 3:30pm
+            start_str = dt_start.strftime('%I:%M%p').lower()
+            if start_str.startswith('0'): start_str = start_str[1:]
+            formatted_time_str = start_str
+        else:
+            formatted_time_str = "All Day"
+            formatted_date_str = start_raw
+    except:
+        pass
+    
+    model = genai.GenerativeModel('gemini-2.5-flash')
+    
+    prompt = f"""
+    You are an automated assistant for Elite Prep Suwanee.
+    Generate a SHORT SMS reminder (max 160 chars) for a teacher.
+    
+    Details:
+    - Teacher: {teacher_name}
+    - Student: {student_name}
+    - Date: {formatted_date_str}
+    - Time: {formatted_time_str}
+    
+    Format:
+    Hi {teacher_name}, Reminder: Tutoring with {student_name} on [Date] at [Time]. -Elite Prep
+    
+    Make sure dates and times are filled in.
+    """
+    
+    try:
+        return generate_content_with_retry(model, prompt)
+    except Exception as e:
+        return f"Error generating SMS: {e}"

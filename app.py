@@ -4,7 +4,12 @@ import auth
 import calendar_api
 import gmail_api
 import agent
+# import sms_code.bulk_send  <-- No longer needed directly
 import os
+import subprocess
+import json
+import tempfile
+import sys
 
 # Page Config
 st.set_page_config(page_title="Calendar Confirmation Agent", page_icon="📅", layout="wide")
@@ -21,8 +26,7 @@ if "APP_PASSWORD" in st.secrets:
         st.stop()
 # ----------------------
 
-# Sidebar - Configuration
-st.sidebar.header("Configuration")
+# Sidebar - Configuration (Hidden)
 # Try to load from secrets or env
 default_api_key = ""
 try:
@@ -30,16 +34,14 @@ try:
 except:
     pass
 
-gemini_api_key = st.sidebar.text_input("Gemini API Key", value=default_api_key, type="password", help="Get it from aistudio.google.com")
-
-if not gemini_api_key:
-    pass
+# Automatically use the key from secrets without showing input
+gemini_api_key = default_api_key
 
 if gemini_api_key:
     agent.configure_genai(gemini_api_key)
-    st.sidebar.success("AI Agent Configured")
 else:
-    st.sidebar.warning("Please enter Gemini API Key to use AI features.")
+    # Log to console instead of showing UI warning
+    print("Warning: Gemini API Key not found in secrets.")
 
 # Authentication
 creds = auth.get_credentials()
@@ -47,8 +49,8 @@ creds = auth.get_credentials()
 if not creds:
     st.info("Please log in to continue.")
     st.stop()
-
-st.sidebar.success("Authenticated with Google")
+    
+# Authentication success message hidden
 
 # Initialize Services
 try:
@@ -116,65 +118,239 @@ with col2:
         default_emails = ", ".join(attendee_emails)
         
         st.write("---")
-        st.write("📧 **Email Settings**")
+        st.write("📧 **Contact Settings**")
         student_email = st.text_input("Student Email (sep by comma)", value=default_emails)
-        teacher_email = st.text_input("Teacher Email", value="")
+        student_phone = st.text_input("Student Phone (sep by comma)", value="", placeholder="e.g. 404-123-4567, 678-999-8888")
         
-        if st.button("Generate Email Drafts"):
-            if not gemini_api_key:
-                st.error("Please configure Gemini API Key first.")
-            else:
-                with st.spinner("Generating emails..."):
-                    # Generate Student Email
-                    try:
-                        student_content = agent.generate_email_content(selected_event, teacher_name, student_name)
-                        s_subject = "Appointment Confirmation"
-                        s_body = student_content
-                        if "Subject:" in student_content:
-                            parts = student_content.split("Subject:", 1)
-                            if len(parts) > 1:
-                                subject_part = parts[1].split("\n", 1)
-                                s_subject = subject_part[0].strip()
-                                if len(subject_part) > 1:
-                                    s_body = subject_part[1].strip()
-                        
-                        st.session_state.student_draft = {'subject': s_subject, 'body': s_body}
-                    except Exception as e:
-                        st.error(f"Failed to generate student email: {str(e)}")
-                        st.session_state.student_draft = {'subject': 'Error', 'body': f'Error generating email: {str(e)}'}
-                    
-                    # Add delay to avoid rate limiting
-                    import time
-                    time.sleep(2)
-                    
-                    # Generate Teacher Email
-                    try:
-                        teacher_content = agent.generate_teacher_email_content(selected_event, teacher_name, student_name)
-                        t_subject = "Appointment Reminder"
-                        t_body = teacher_content
-                        if "Subject:" in teacher_content:
-                            parts = teacher_content.split("Subject:", 1)
-                            if len(parts) > 1:
-                                subject_part = parts[1].split("\n", 1)
-                                t_subject = subject_part[0].strip()
-                                if len(subject_part) > 1:
-                                    t_body = subject_part[1].strip()
-
-                        st.session_state.teacher_draft = {'subject': t_subject, 'body': t_body}
-                    except Exception as e:
-                        st.error(f"Failed to generate teacher email: {str(e)}")
-                        st.session_state.teacher_draft = {'subject': 'Error', 'body': f'Error generating email: {str(e)}'}
-
-    # Display Drafts
-    tab1, tab2 = st.tabs(["Student Email", "Teacher Email"])
+        teacher_email = st.text_input("Teacher Email", value="")
+        teacher_phone = st.text_input("Teacher Phone (sep by comma)", value="", placeholder="e.g. 404-555-0199")
+        
+        col_gen_sms, col_gen_email = st.columns(2)
+        
+        with col_gen_sms:
+            if st.button("Generate Text Drafts 📱", use_container_width=True):
+                if not gemini_api_key:
+                    st.error("Please configure Gemini API Key first.")
+                else:
+                    with st.spinner("Generating SMS drafts..."):
+                        # Generate Student SMS
+                        try:
+                            student_sms = agent.generate_sms_content(selected_event, teacher_name, student_name)
+                            st.session_state.student_sms_draft = student_sms
+                        except Exception as e:
+                             st.session_state.student_sms_draft = f"Error: {str(e)}"
     
-    with tab1:
+                        # Generate Teacher SMS
+                        try:
+                            teacher_sms = agent.generate_teacher_sms_content(selected_event, teacher_name, student_name)
+                            st.session_state.teacher_sms_draft = teacher_sms
+                        except Exception as e:
+                             st.session_state.teacher_sms_draft = f"Error: {str(e)}"
+
+        with col_gen_email:
+            if st.button("Generate Email 📧", use_container_width=True):
+                if not gemini_api_key:
+                    st.error("Please configure Gemini API Key first.")
+                else:
+                    with st.spinner("Generating Email drafts..."):
+                        # Generate Student Email
+                        try:
+                            student_content = agent.generate_email_content(selected_event, teacher_name, student_name)
+                            s_subject = "Appointment Confirmation"
+                            s_body = student_content
+                            if "Subject:" in student_content:
+                                parts = student_content.split("Subject:", 1)
+                                if len(parts) > 1:
+                                    subject_part = parts[1].split("\n", 1)
+                                    s_subject = subject_part[0].strip()
+                                    if len(subject_part) > 1:
+                                        s_body = subject_part[1].strip()
+                            
+                            st.session_state.student_draft = {'subject': s_subject, 'body': s_body}
+                        except Exception as e:
+                            st.error(f"Failed to generate student email: {str(e)}")
+                            st.session_state.student_draft = {'subject': 'Error', 'body': f'Error generating email: {str(e)}'}
+                        
+                        # Add delay to avoid rate limiting
+                        import time
+                        time.sleep(1)
+                        
+                        # Generate Teacher Email
+                        try:
+                            teacher_content = agent.generate_teacher_email_content(selected_event, teacher_name, student_name)
+                            t_subject = "Appointment Reminder"
+                            t_body = teacher_content
+                            if "Subject:" in teacher_content:
+                                parts = teacher_content.split("Subject:", 1)
+                                if len(parts) > 1:
+                                    subject_part = parts[1].split("\n", 1)
+                                    t_subject = subject_part[0].strip()
+                                    if len(subject_part) > 1:
+                                        t_body = subject_part[1].strip()
+
+                            st.session_state.teacher_draft = {'subject': t_subject, 'body': t_body}
+                        except Exception as e:
+                            st.error(f"Failed to generate teacher email: {str(e)}")
+                            st.session_state.teacher_draft = {'subject': 'Error', 'body': f'Error generating email: {str(e)}'}
+
+    # Display Drafts - Reordered Tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["Student SMS 📱", "Teacher SMS 📱", "Student Email", "Teacher Email"])
+    
+    with tab1: # Student SMS (Formerly Tab 3)
+        if 'student_sms_draft' in st.session_state:
+            st.write("#### Student SMS Draft")
+            s_sms_input = st.text_area("Message", value=st.session_state.student_sms_draft, height=100, key="s_sms")
+            st.info(f"Recipients: {student_phone if student_phone else 'None'}")
+            
+            if st.button("Send SMS to Student 📱", key="send_sms_student"):
+                if not student_phone:
+                    st.error("Please enter Student Phone Number(s).")
+                else:
+                    phones = [p.strip() for p in student_phone.split(',') if p.strip()]
+                    st.info(f"Sending to {len(phones)} recipients...")
+                    
+                    status_box = st.empty()
+                    log_box = st.container()
+                    
+                    def progress_update(msg):
+                        status_box.markdown(f"**Status:** {msg}")
+                        with log_box:
+                            st.text(msg)
+                            
+                    try:
+                        config = {
+                            'phone_numbers': phones, 
+                            'message_text': s_sms_input,
+                            'group_mode': True
+                        }
+                        
+                        tf = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json', encoding='utf-8')
+                        json.dump(config, tf)
+                        tf.close()
+                        tmp_path = tf.name
+                        
+                        runner_script = os.path.join(os.getcwd(), "sms_code", "sms_runner.py")
+                        cmd = [sys.executable, runner_script, tmp_path]
+                        
+                        process = subprocess.Popen(
+                            cmd, 
+                            stdout=subprocess.PIPE, 
+                            stderr=subprocess.STDOUT, 
+                            text=True, 
+                            encoding='utf-8',
+                            bufsize=1
+                        )
+                        
+                        while True:
+                            line = process.stdout.readline()
+                            if not line and process.poll() is not None:
+                                break
+                            if line:
+                                line = line.strip()
+                                if line.startswith("PROGRESS:"):
+                                    msg = line.replace("PROGRESS:", "", 1)
+                                    progress_update(msg)
+                                elif line.startswith("ERROR_TRACE:"):
+                                    rest = process.stdout.read()
+                                    st.error(f"Error in SMS Process:\n{rest}")
+                                else:
+                                    print(f"[SMS_Runner]: {line}")
+                        
+                        try:
+                            os.remove(tmp_path)
+                        except:
+                            pass
+                            
+                        if process.returncode == 0:
+                            st.success("✅ SMS Sending Process Completed!")
+                        else:
+                            st.warning("Process finished with potential issues. Check logs above.")
+
+                    except Exception as e:
+                        import traceback
+                        st.error(f"Failed to launch SMS process:\n{traceback.format_exc()}")
+
+    with tab2: # Teacher SMS (Formerly Tab 4)
+         if 'teacher_sms_draft' in st.session_state:
+            st.write("#### Teacher SMS Draft")
+            t_sms_input = st.text_area("Message", value=st.session_state.teacher_sms_draft, height=100, key="t_sms")
+            st.info(f"Recipients: {teacher_phone if teacher_phone else 'None'}")
+
+            if st.button("Send SMS to Teacher 📱", key="send_sms_teacher"):
+                if not teacher_phone:
+                    st.error("Please enter Teacher Phone Number(s).")
+                else:
+                    phones = [p.strip() for p in teacher_phone.split(',') if p.strip()]
+                    st.info(f"Sending to {len(phones)} recipients...")
+                    
+                    status_box = st.empty()
+                    log_box = st.container()
+                    
+                    def progress_update(msg):
+                        status_box.markdown(f"**Status:** {msg}")
+                        with log_box:
+                            st.text(msg)
+                            
+                    try:
+                        config = {
+                            'phone_numbers': phones, 
+                            'message_text': t_sms_input,
+                            'group_mode': True
+                        }
+                        
+                        tf = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json', encoding='utf-8')
+                        json.dump(config, tf)
+                        tf.close()
+                        tmp_path = tf.name
+                        
+                        runner_script = os.path.join(os.getcwd(), "sms_code", "sms_runner.py")
+                        cmd = [sys.executable, runner_script, tmp_path]
+                        
+                        process = subprocess.Popen(
+                            cmd, 
+                            stdout=subprocess.PIPE, 
+                            stderr=subprocess.STDOUT, 
+                            text=True, 
+                            encoding='utf-8',
+                            bufsize=1
+                        )
+                        
+                        while True:
+                            line = process.stdout.readline()
+                            if not line and process.poll() is not None:
+                                break
+                            if line:
+                                line = line.strip()
+                                if line.startswith("PROGRESS:"):
+                                    msg = line.replace("PROGRESS:", "", 1)
+                                    progress_update(msg)
+                                elif line.startswith("ERROR_TRACE:"):
+                                    rest = process.stdout.read()
+                                    st.error(f"Error in SMS Process:\n{rest}")
+                                else:
+                                    print(f"[SMS_Runner]: {line}")
+                        
+                        try:
+                            os.remove(tmp_path)
+                        except:
+                            pass
+
+                        if process.returncode == 0:
+                            st.success("✅ SMS Sending Process Completed!")
+                        else:
+                            st.warning("Process finished with potential issues.")
+
+                    except Exception as e:
+                        import traceback
+                        st.error(f"Failed to launch SMS process:\n{traceback.format_exc()}")
+
+    with tab3: # Student Email (Formerly Tab 1)
         if 'student_draft' in st.session_state:
             st.write("#### Student Email Draft")
             s_subj_input = st.text_input("Student Subject", value=st.session_state.student_draft['subject'], key="s_subj")
             s_body_input = st.text_area("Student Body", value=st.session_state.student_draft['body'], height=300, key="s_body")
             
-            if st.button("Send to Student 🚀", key="send_student"):
+            if st.button("Send Email to Student 🚀", key="send_student"):
                 if not student_email:
                     st.error("Please enter Student Email.")
                 else:
@@ -189,13 +365,13 @@ with col2:
                     else:
                         st.error("Failed to send student email.")
 
-    with tab2:
+    with tab4: # Teacher Email (Formerly Tab 2)
         if 'teacher_draft' in st.session_state:
             st.write("#### Teacher Email Draft")
             t_subj_input = st.text_input("Teacher Subject", value=st.session_state.teacher_draft['subject'], key="t_subj")
             t_body_input = st.text_area("Teacher Body", value=st.session_state.teacher_draft['body'], height=300, key="t_body")
             
-            if st.button("Send to Teacher 🚀", key="send_teacher"):
+            if st.button("Send Email to Teacher 🚀", key="send_teacher"):
                 if not teacher_email:
                     st.error("Please enter Teacher Email.")
                 else:

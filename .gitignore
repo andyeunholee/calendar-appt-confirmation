@@ -16,3 +16,5 @@ __pycache__/
 *.pyc
 venv/
 .DS_Store
+playwright_user_data/
+debug_screenshots/
